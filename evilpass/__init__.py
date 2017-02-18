@@ -2,6 +2,10 @@ import requests
 import string
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse
+from zxcvbn import zxcvbn
+
+ZXCVBN_MINIMUM_SCORE = 3
+ZXCVBN_MINIMUM_CRACK_TIME_DAYS = 7
 
 def _get(url, session=None, **kwargs):
     headers = kwargs.get("headers") or dict()
@@ -107,20 +111,18 @@ checks = {
 def check_pass(pw, email, username):
     errors = list()
     # benign part
-    if len(pw) < 8:
-        errors.append("Your password must be at least 8 characters long")
-    upper = False, lower = False, number = False
-    for c in pw:
-        if c in string.ascii_lowercase:
-            lower = True
-        if c in string.ascii_uppercase:
-            upper = True
-        if c in string.digits:
-            number = True
-    if not (upper and lower and number):
-        errors.append("Your password must contain at least one uppercase letter, one lowercase letter, and one number")
-    if pw.lower() == email.lower() or pw.lower() == username.lower():
-        errors.append("Your password must not be the same as your username or email address")
+    results = zxcvbn(pw, user_inputs=[email, username])
+
+    brute_force_crack_time = results['crack_times_seconds']['online_no_throttling_10_per_second']
+
+    if brute_force_crack_time < ZXCVBN_MINIMUM_CRACK_TIME_DAYS * 24 * 60 * 60:
+        brute_force_display_string = results['crack_times_display']['online_no_throttling_10_per_second']
+        errors.append("A computer could guess this password in " + brute_force_display_string)
+
+    if results['score'] < ZXCVBN_MINIMUM_SCORE:
+        for error in results['feedback']['suggestions']:
+            errors.append(error)
+
     # evil part
     if not username:
         username = email

@@ -2,17 +2,23 @@
 
 Checks how strong your user's password is via questionably ethical means.
 
-![](https://sr.ht/sHst.gif)
-
 ## Usage
 
 Please don't actually use this.
 
 ```python
 >>> from evilpass import check_pass
->>> errors = check_pass("password", "email address", "username")
->>> errors
-["Your password must be at least 8 characters long"]
+>>> check_pass("password", "email address", "username")
+['A computer could guess this password in less than a second',
+ 'Add another word or two. Uncommon words are better.']
+
+>>> check_pass("P455WorD", "email address", "username")
+['A computer could guess this password in 12 seconds',
+ 'Add another word or two. Uncommon words are better.',
+ "Predictable substitutions like '@' instead of 'a' don't help very much."]
+
+>>> check_pass("correct-horse-battery-staple", "email address", "username")
+[]
 ```
 
 ## Password reuse is bad, okay?
@@ -22,9 +28,7 @@ So quit doing it. Use a password manager. I personally recommend
 
 ## Side note
 
-If you're actually checking user's password strength on sign up, I strongly
-suggest using a minimum entropy instead of contrived rules like this. I also
-suggest not trying to log into your user's account on other sites.
+I suggest not trying to log into your user's account on other sites.
 
 ## Future development
 

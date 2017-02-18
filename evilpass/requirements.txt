@@ -1,0 +1,2 @@
+zxcvbn-python==4.4.14
+bs4==0.0.1
